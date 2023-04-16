@@ -26,7 +26,7 @@ path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
 NON_STANDARD_REGIONS = json.loads(open(path).read())
 
 
-def fetch(url, check_cache=True, cache_response=True):
+async def fetch(url, check_cache=True, cache_response=True, async_session=None):
     """Return response from a URL, and cache results for one day."""
     # Use system tempfile for cache path.
     cache_dir = os.path.join(tempfile.gettempdir(), "wbpy")
@@ -56,7 +56,12 @@ def fetch(url, check_cache=True, cache_response=True):
             logger.debug("URL not found in cache....")
 
     logger.debug("Getting web response...")
-    response = request.urlopen(url).read()
+    if async_session:
+        async with async_session.get(url) as response:
+            if response.status == 200:
+                response = await response.read()
+    else:
+        response = request.urlopen(url).read()
 
     # py3 returns bytestring
     if sys.version_info >= (3,):

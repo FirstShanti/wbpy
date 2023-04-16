@@ -133,10 +133,12 @@ class IndicatorAPI(object):
     # The API uses some non-ISO 2-digit and 3-digit codes. Make them available.
     NON_STANDARD_REGIONS = utils.NON_STANDARD_REGIONS
 
-    def __init__(self, fetch=None):
-        self.fetch = fetch if fetch else utils.fetch
+    def __init__(self, fetch=None, async_session=None):
+        self.async_session = async_session
+        self.fetch = fetch if fetch else utils.fetch if not async_session else \
+            lambda url: utils.fetch(url, check_cache=True, cache_response=True, async_session=async_session)
 
-    def get_dataset(self, indicator, country_codes=None,
+    async def get_dataset(self, indicator, country_codes=None,
             **kwargs):
         """Request a dataset from the API.
 
@@ -170,7 +172,9 @@ class IndicatorAPI(object):
                 indicator)
         url = self._generate_indicators_url(url, dataset_params=True, **kwargs)
         call_date = datetime.datetime.now().date()
-        json_resp = json.loads(self.fetch(url))
+        json_resp = await self.fetch(url)
+        if isinstance(json_resp, str):
+            json_resp = json.loads(json_resp)
         self._raise_if_bad_response(json_resp, url)
         return IndicatorDataset(json_resp, url, call_date)
 
@@ -631,5 +635,5 @@ class IndicatorAPI(object):
         return filtered_data
 
     def _raise_if_bad_response(self, json_resp, url):
-        if json_resp[0].get("pages") == 0 or json_resp[0].get("message"):
+        if not json_resp or json_resp[0].get("pages") == 0 or json_resp[0].get("message"):
             raise ValueError(utils.EXC_MSG % (url, json_resp))
